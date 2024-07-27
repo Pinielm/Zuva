@@ -1,0 +1,71 @@
+const os = require("os");
+const http = require("http");
+const https = require("https");
+
+// Replace with your DuckDNS token and domain
+const DUCKDNS_TOKEN = "010fc549-d6b3-4f51-8882-5055ba011448";
+const DUCKDNS_DOMAIN = "myattendance";
+
+// Function to get the current public IP address
+// Function to get the current internal IP address
+function getCurrentInternalIPAddress() {
+  const interfaces = os.networkInterfaces();
+  for (const interfaceName in interfaces) {
+    for (const interfaceInfo of interfaces[interfaceName]) {
+      if (interfaceInfo.family === "IPv4" && !interfaceInfo.internal) {
+        return interfaceInfo.address;
+      }
+    }
+  }
+  return null;
+}
+
+// Function to update the DuckDNS record
+function updateDuckDNSRecord(ip) {
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: "www.duckdns.org",
+      path: `/update?domains=${DUCKDNS_DOMAIN}&token=${DUCKDNS_TOKEN}&ip=${ip}`,
+      method: "GET",
+    };
+
+    const req = http.request(options, (res) => {
+      let data = "";
+      res.on("data", (chunk) => {
+        data += chunk.toString();
+      });
+      res.on("end", () => {
+        if (data.trim() === "OK") {
+          resolve();
+        } else {
+          reject(new Error(`DuckDNS update failed with response: ${data}`));
+        }
+      });
+    });
+
+    req.on("error", (err) => {
+      reject(err);
+    });
+
+    req.end();
+  });
+}
+
+// Main function to continuously update the DuckDNS record
+async function updateDuckDNSRecordPeriodically() {
+  try {
+    const currentIP = await getCurrentInternalIPAddress();
+    console.log(`Current IP address: ${currentIP}`);
+
+    await updateDuckDNSRecord(currentIP);
+    console.log("DuckDNS record updated successfully!");
+  } catch (err) {
+    console.error("Error updating DuckDNS record:", err);
+  }
+
+  // Wait for 5 minutes before updating the record again
+  setTimeout(updateDuckDNSRecordPeriodically, 5 * 60 * 1000);
+}
+
+// Start the update process
+updateDuckDNSRecordPeriodically();
